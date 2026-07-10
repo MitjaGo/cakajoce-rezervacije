@@ -201,9 +201,9 @@ def filter_dataframe(df: pd.DataFrame, file_name: str, filter_date, min_days, ur
         if d is not None and d <= urgent_days:
             r.append(f"Prihod kmalu čez (1,2 {urgent_days} dni)")
         if d is not None and d > long_lead_days:
-            r.append(f"Pridejo čez {long_lead_days} dni in več")
+            r.append(f" Prihod {long_lead_days} dni + (od nastanka)")
         if not r:
-            r.append(f"Pridejo v obdobju {urgent_days + 1}-{long_lead_days} dni (spremljaj)")
+            r.append(f"Prihod {urgent_days + 1}-{long_lead_days} dni")
         return " + ".join(r)
 
     work["Razlog"] = work.apply(_razlog, axis=1)
