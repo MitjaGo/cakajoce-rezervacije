@@ -35,7 +35,7 @@ with header_right:
 st.markdown(
     """
 Naloži od **1 do 6** XLS datotek (izvoz iz sistema PHOBS / Rezervacije na čakanju, označi pred prenosom v excel samo rezervacije s statusom na čakanju obarvane z oranžno ali rumeno barvo ). 
-Aplikacija bo:
+- Aplikacija bo:
 - prebrala podatke iz vsake datoteke,
 - izračunala, koliko dni je preteklo od stolpca **Datum nastanka** do izbranega
   datuma filtracije,
