@@ -230,6 +230,7 @@ def process_file(file, filter_date, min_days, urgent_days) -> "pd.DataFrame | No
             "Code": "Številka PH",
             "PMS koda": "HIS",
             "Datum nastanka": "Datum ponudbe",
+            "Dni od nastanka": "Število preteklih dni (od nastanka)",
         }
     )
     return result
