@@ -3,9 +3,9 @@ Streamlit aplikacija: Filtriranje rezervacij s statusom "Na čakanju"
 ======================================================================
 Naloži 1-6 XLS izvoznih datotek (PMS sistem, HTML-tabela s pripono .xls),
 filtrira vrstice s statusom "Na čakanju", kjer je od stolpca
-"Datum nastanka" do izbranega datuma filtracije preteklo N ali več dni
-(privzeto 4), združi rezultate vseh datotek v en Excel dokument in
-omogoči prenos na računalnik.
+"Datum nastanka" do današnjega dne preteklo N ali več dni (privzeto 4),
+združi rezultate vseh datotek v en Excel dokument in omogoči prenos na
+računalnik.
 
 Zagon:
     pip install -r requirements.txt
@@ -37,8 +37,8 @@ st.markdown(
 Naloži od **1 do 6** XLS datotek (izvoz iz sistema PHOBS / Rezervacije na čakanju, označi pred prenosom v excel samo rezervacije s statusom na čakanju obarvane z oranžno ali rumeno barvo ). 
 
 - Aplikacija bo prebrala podatke iz vsake datoteke,
-- izračunala, koliko dni je preteklo od stolpca **Datum nastanka** do izbranega
-  datuma filtracije,
+- izračunala, koliko dni je preteklo od stolpca **Datum nastanka** do
+  današnjega dne,
 - prikazala vrstice, kjer je preteklo **N ali več dni** (privzeto 4),
 - prikazala stolpce: **Številka PH, HIS, Objekt, Datum ponudbe, Prihod,
   Lastnik rezervacije, Status**,
@@ -51,14 +51,11 @@ Naloži od **1 do 6** XLS datotek (izvoz iz sistema PHOBS / Rezervacije na čaka
 # Nastavitve filtra
 # ---------------------------------------------------------------------------
 URGENT_DAYS = 3  # rezervacije s prihodom 1, 2 ali 3 dni po nastanku - vedno prikazane
+filter_date = date.today()  # datum filtracije - vedno današnji dan, skrit iz UI
 
-col1, col2 = st.columns(2)
-with col1:
-    filter_date = st.date_input("Datum filtracije", value=date.today())
-with col2:
-    min_days = st.number_input(
-        "Min. dni od 'Datum nastanka' (dolgo čakanje)", min_value=0, value=4, step=1
-    )
+min_days = st.number_input(
+    "Min. dni od 'Datum nastanka' (dolgo čakanje)", min_value=0, value=4, step=1
+)
 
 st.caption(
     "Vrstica se prikaže, če je status 'Na čakanju' IN (od nastanka je "
@@ -447,14 +444,14 @@ if uploaded_files:
                 """,
                 height=45,
             )
-     
-        st.caption(
-            "💡 Za lepo oblikovano tabelo v e-mailu: najprej klikni **'📋 Kopiraj "
-            "tabelo'**, nato **'📧 Pošlji kot e-mail'** (odpre Outlook) in v telo "
-            "e-maila prilepi (Ctrl+V) - tabela se prilepi enako oblikovana kot pri "
-            "tisku. Excel priloge zaradi omejitev brskalnika ni mogoče samodejno "
-            "pripeti - za to najprej prenesi Excel in ga ročno priloži e-mailu."
 
+        st.caption(
+            "💡 Za lepo oblikovano tabelo v e-mailu: klikni **'📋 Kopiraj "
+            "tabelo v odložišče'**, nato odpri nov e-mail (npr. v Outlooku) "
+            "in v telo prilepi (Ctrl+V) - tabela se prilepi enako oblikovana "
+            "kot pri tisku. Excel priloge zaradi omejitev brskalnika ni mogoče "
+            "samodejno pripeti - za to najprej prenesi Excel in ga ročno "
+            "priloži e-mailu."
         )
     else:
         st.info("Ni najdenih vrstic, ki bi ustrezale filtru v nobeni naloženi datoteki.")
