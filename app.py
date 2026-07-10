@@ -56,7 +56,7 @@ filter_date = date.today()  # datum filtracije - vedno današnji dan, skrit iz U
 narrow_col, _spacer = st.columns([1, 3])
 with narrow_col:
     min_days = st.number_input(
-        "(Koliko dni je minimalno na čakanju, privzeto 4 ali več)", min_value=0, value=4, step=1
+        "(Koliko dni je minimalno rezervacija na čakanju, privzeto 4 ali več)", min_value=0, value=4, step=1
     )
 
 st.caption(
