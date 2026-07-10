@@ -28,15 +28,15 @@ LOGO_URL = "https://www.adria-ankaran.si//app/uploads/2025/10/logo-Adria.jpg"
 
 header_left, header_right = st.columns([4, 1])
 with header_left:
-    st.title("📋 Filtriranje rezervacij iz PHOBSA s statusom NA ČAKANJU")
+    st.title("📋 Filtriranje rezervacij s statusom \"Na čakanju\"")
 with header_right:
-    st.image(LOGO_URL, width=110)
+    st.image(LOGO_URL, width=300)
 
-st.markdowbsn(
-    """pho
-Naloži od **1 do 6** XLS datotek (izvoz iz sistema PHOBS / Rezervacije na čakanju ). Označi na Phobsu preden prenseš v excel samo vrstice s statusom **Na čakanju** z rumeno ali oranžno obarvano podlago.
-Aplikacija bo:
+st.markdown(
+    """
+Naloži od **1 do 6** XLS datotek (izvoz iz PMS sistema). Aplikacija bo:
 - prebrala podatke iz vsake datoteke,
+- obdržala samo vrstice s statusom **Na čakanju**,
 - izračunala, koliko dni je preteklo od stolpca **Datum nastanka** do izbranega
   datuma filtracije,
 - prikazala vrstice, kjer je preteklo **N ali več dni** (privzeto 4),
@@ -468,7 +468,7 @@ if uploaded_files:
         st.info("Ni najdenih vrstic, ki bi ustrezale filtru v nobeni naloženi datoteki.")
 else:
     st.info("Prosim, naloži vsaj eno XLS datoteko (do največ 6).")
-
+                 
 
 
 
