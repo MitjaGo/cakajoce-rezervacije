@@ -43,9 +43,9 @@ Naloži od **1 do 6** XLS datotek (izvoz iz sistema PHOBS / Rezervacije na čaka
 - samodejno ugotovila referenčni datum ("danes") kot **najnovejši datum v
   stolpcu Datum nastanka** med vsemi naloženimi podatki (ne zanaša se na
   sistemsko uro strežnika),
-- izračunala, koliko dni je preteklo od stolpca **Datum nastanka** do tega
-  referenčnega datuma,
-- prikazala vrstice, kjer je preteklo **N ali več dni** (privzeto 4),
+- prikazala **vse vrstice s statusom Na čakanju**, barvno pa označila
+  nujnost glede na to, koliko dni je preteklo od stolpca **Datum nastanka**
+  do referenčnega datuma,
 - prikazala stolpce: **Številka PH, HIS, Objekt, Datum ponudbe, Prihod,
   Lastnik rezervacije, Status**,
 - združila rezultate vseh naloženih datotek v en Excel dokument, ki ga
@@ -66,11 +66,12 @@ with narrow_col:
     )
 
 st.caption(
-    "Vrstica se prikaže, če je status 'Na čakanju' IN (od nastanka je "
-    f"preteklo ≥ zgornji prag DNI, ALI je prihod le {URGENT_DAYS} dni ali manj "
-    "od nastanka rezervacije - gost mora plačati vnaprej, zato je treba te "
-    f"rezervacije nujno preveriti, ALI je prihod več kot {LONG_LEAD_DAYS} dni "
-    "od nastanka - te niso nujne, a naj se preveri plačilo pred prihodom)."
+    "Prikazane so VSE vrstice s statusom 'Na čakanju'. Barva pove nujnost: "
+    f"🔴 rdeča = prihod je {URGENT_DAYS} dni ali manj od nastanka (gost mora "
+    "plačati vnaprej, nujno preveriti); 🔵 svetlo modra = prihod je več kot "
+    f"{LONG_LEAD_DAYS} dni od nastanka (ni nujno, a naj se preveri plačilo "
+    "pred prihodom); brez barve = na čakanju ≥ zgornji prag dni ali vmesno "
+    "obdobje."
 )
 
 uploaded_files = st.file_uploader(
@@ -178,7 +179,6 @@ def filter_dataframe(df: pd.DataFrame, file_name: str, filter_date, min_days, ur
     work["Dni od nastanka"] = work["_datum_nastanka_parsed"].apply(
         lambda d: (filter_date - d).days
     )
-    dolgo_cakanje = work["Dni od nastanka"] >= min_days
 
     # dni med nastankom rezervacije in prihodom gosta (prihod kmalu = nujno,
     # ker gost mora plačati vnaprej, rok za urejanje je kratek)
@@ -188,17 +188,10 @@ def filter_dataframe(df: pd.DataFrame, file_name: str, filter_date, min_days, ur
         else None,
         axis=1,
     )
-    prihod_kmalu = work["Dni do prihoda (od nastanka)"].apply(
-        lambda v: v is not None and v <= urgent_days
-    )
 
-    # prihod je precej oddaljen od nastanka (>10 dni) - ni nujno, a naj se
-    # spremlja, da se plačilo preveri pred prihodom
-    prihod_dolgo_narazen = work["Dni do prihoda (od nastanka)"].apply(
-        lambda v: v is not None and v > long_lead_days
-    )
-
-    work = work[dolgo_cakanje | prihod_kmalu | prihod_dolgo_narazen]
+    # Prikažemo VSE vrstice s statusom 'Na čakanju', ne glede na dneve.
+    # Barvna kategorizacija (rdeča/modra/brez) spodaj ostane kot informativna
+    # oznaka nujnosti, a ne omejuje več, katere vrstice se sploh prikažejo.
     if work.empty:
         return work
 
@@ -211,6 +204,8 @@ def filter_dataframe(df: pd.DataFrame, file_name: str, filter_date, min_days, ur
             r.append(f"Prihod kmalu čez (1,2 {urgent_days} dni)")
         if d is not None and d > long_lead_days:
             r.append(f"Pridejo čez več kot {long_lead_days} dni (preveri plačilo)")
+        if not r:
+            r.append("V vmesnem obdobju (spremljaj)")
         return " + ".join(r)
 
     work["Razlog"] = work.apply(_razlog, axis=1)
@@ -417,6 +412,7 @@ if uploaded_files:
 
     if all_results:
         combined = pd.concat(all_results, ignore_index=True)
+        combined.index = combined.index + 1  # zaporedna številka naj se začne pri 1
         st.success(f"Skupno najdenih {len(combined)} vrstic, ki ustrezajo pogojem.")
 
         color_series = combined["Razlog"].astype(str).apply(_row_color)
