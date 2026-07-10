@@ -196,7 +196,7 @@ def filter_dataframe(df: pd.DataFrame, file_name: str, filter_date, min_days, ur
     def _razlog(row):
         r = []
         if row["Dni od nastanka"] >= min_days:
-            r.append(f"Na čakanju enako ali več kot ({min_days} dni)")
+            r.append(f"Na čakanju ({min_days} dni + )")
         d = row["Dni do prihoda (od nastanka)"]
         if d is not None and d <= urgent_days:
             r.append(f"Prihod kmalu čez (1,2 {urgent_days} dni)")
