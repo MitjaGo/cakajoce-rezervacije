@@ -26,7 +26,7 @@ LOGO_URL = "https://www.adria-ankaran.si//app/uploads/2025/10/logo-Adria.jpg"
 
 header_left, header_right = st.columns([4, 1])
 with header_left:
-    st.title("📋 Filtriranje rezervacij iz PHOBSA s statusom "Na čakanju"")
+    st.title("📋 Filtriranje rezervacij iz PHOBSA s statusom - NA ČAKANJU")
 with header_right:
     st.image(LOGO_URL, width=105)
 
