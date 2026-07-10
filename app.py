@@ -447,15 +447,7 @@ if uploaded_files:
                 """,
                 height=45,
             )
-        with btn_col4:
-            mailto_url = build_mailto_link(
-                combined, filter_date, recipient="mitja.goja@adria-ankaran.si"
-            )
-            st.link_button(
-                "📧 Pošlji kot e-mail",
-                url=mailto_url,
-                use_container_width=True,
-            )
+     
         st.caption(
             "💡 Za lepo oblikovano tabelo v e-mailu: najprej klikni **'📋 Kopiraj "
             "tabelo'**, nato **'📧 Pošlji kot e-mail'** (odpre Outlook) in v telo "
