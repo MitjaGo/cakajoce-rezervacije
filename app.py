@@ -34,9 +34,7 @@ with header_right:
 
 st.markdowbsn(
     """pho
-Naloži od **1 do 6** XLS datotek (izvoz iz sistema PHOBS / Rezervacije na čakanju ). 
-*Označi na Phobsu preden prenseš v excel samo vrstice s statusom **Na čakanju** z rumeno ali oranžno obarvano podlago
-
+Naloži od **1 do 6** XLS datotek (izvoz iz sistema PHOBS / Rezervacije na čakanju ). Označi na Phobsu preden prenseš v excel samo vrstice s statusom **Na čakanju** z rumeno ali oranžno obarvano podlago.
 Aplikacija bo:
 - prebrala podatke iz vsake datoteke,
 - izračunala, koliko dni je preteklo od stolpca **Datum nastanka** do izbranega
