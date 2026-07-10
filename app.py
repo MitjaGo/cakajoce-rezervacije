@@ -383,7 +383,7 @@ if uploaded_files:
                         worksheet.cell(row=excel_row, column=col).fill = red_fill
         output.seek(0)
 
-        btn_col1, btn_col2, btn_col3, btn_col4 = st.columns(4)
+        btn_col1, btn_col2, btn_col3 = st.columns(3)
         with btn_col1:
             st.download_button(
                 label="⬇️ Prenesi kot Excel (.xlsx)",
