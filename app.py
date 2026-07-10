@@ -1,10 +1,10 @@
 """
 Streamlit aplikacija: Filtriranje rezervacij s statusom "Na čakanju"
 ======================================================================
-Naloži 1-6 XLS izvoznih datotek (iz Phobsa/Čakajoča plačila, datoteke s priponko .xls za vsak objekt posebej),
+Naloži 1-6 XLS izvoznih datotek (PMS sistem, HTML-tabela s pripono .xls),
 filtrira vrstice s statusom "Na čakanju", kjer je od stolpca
-"Datum nastanka" do izbranega datuma filtracije preteklo od poslane ponudbe N dni ali več dni
-(N = privzeto 4 dni), združi rezultate vseh datotek v en Excel dokument in
+"Datum nastanka" do izbranega datuma filtracije preteklo N ali več dni
+(privzeto 4), združi rezultate vseh datotek v en Excel dokument in
 omogoči prenos na računalnik.
 
 Zagon:
@@ -15,9 +15,11 @@ Zagon:
 import re
 from datetime import date
 from io import BytesIO
+from urllib.parse import quote
 
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 from openpyxl.styles import PatternFill
 
 st.set_page_config(page_title="Rezervacije - Na čakanju", layout="wide")
@@ -26,13 +28,13 @@ LOGO_URL = "https://www.adria-ankaran.si//app/uploads/2025/10/logo-Adria.jpg"
 
 header_left, header_right = st.columns([4, 1])
 with header_left:
-    st.title("📋 Rezervacije iz PHOBSA s statusom - NA ČAKANJU")
+    st.title("📋 Filtriranje rezervacij s statusom \"Na čakanju\"")
 with header_right:
-    st.image(LOGO_URL, width=105)
+    st.image(LOGO_URL, width=300)
 
 st.markdown(
     """
-Naloži od **1 do 6** XLS datotek (izvoz iz PHOBS sistema v razdelku "Rezervacije na čakanju). Aplikacija bo:
+Naloži od **1 do 6** XLS datotek (izvoz iz PMS sistema). Aplikacija bo:
 - prebrala podatke iz vsake datoteke,
 - obdržala samo vrstice s statusom **Na čakanju**,
 - izračunala, koliko dni je preteklo od stolpca **Datum nastanka** do izbranega
@@ -235,6 +237,72 @@ def process_file(file, filter_date, min_days, urgent_days) -> "pd.DataFrame | No
     return result
 
 
+def build_print_html(df: pd.DataFrame, urgent_mask: pd.Series, filter_date) -> str:
+    """Zgradi samostojen HTML dokument s tabelo, oblikovan za tiskanje na A4,
+    z gumbom, ki sproži tiskanje (window.print())."""
+    header_html = "".join(
+        f"<th>{c}</th>" for c in df.columns
+    )
+    rows_html = ""
+    for idx, row in df.iterrows():
+        row_style = ' style="background-color:#ffcccc;"' if urgent_mask.loc[idx] else ""
+        cells = "".join(f"<td>{'' if pd.isna(v) else v}</td>" for v in row)
+        rows_html += f"<tr{row_style}>{cells}</tr>"
+
+    return f"""
+    <html>
+    <head>
+    <meta charset="utf-8">
+    <style>
+        @page {{ size: A4 landscape; margin: 12mm; }}
+        body {{ font-family: Arial, Helvetica, sans-serif; }}
+        h2 {{ margin: 0 0 4px 0; }}
+        p.meta {{ margin: 0 0 12px 0; color: #555; font-size: 12px; }}
+        table {{ border-collapse: collapse; width: 100%; }}
+        th, td {{ border: 1px solid #999; padding: 4px 6px; font-size: 10px; text-align: left; }}
+        th {{ background-color: #f0f0f0; }}
+        #printBtn {{
+            padding: 8px 18px; font-size: 14px; cursor: pointer;
+            background-color: #d63333; color: white; border: none; border-radius: 4px;
+        }}
+        @media print {{
+            #printBtn {{ display: none; }}
+        }}
+    </style>
+    </head>
+    <body>
+        <button id="printBtn" onclick="window.print()">🖨️ Natisni na A4</button>
+        <h2>Rezervacije - Na čakanju</h2>
+        <p class="meta">Datum filtracije: {filter_date} · Skupno vrstic: {len(df)}</p>
+        <table>
+            <thead><tr>{header_html}</tr></thead>
+            <tbody>{rows_html}</tbody>
+        </table>
+    </body>
+    </html>
+    """
+
+
+def build_mailto_link(df: pd.DataFrame, filter_date, recipient: str = "") -> str:
+    """Zgradi mailto: povezavo s preprostim tekstovnim povzetkom tabele.
+    Klik odpre privzeti e-poštni odjemalec (npr. Outlook) z izpolnjeno
+    zadevo in vsebino."""
+    subject = f"Rezervacije na čakanju - {filter_date}"
+    lines = [
+        f"Rezervacije s statusom 'Na čakanju' na dan {filter_date} "
+        f"(skupno {len(df)} vrstic):",
+        "",
+    ]
+    for _, row in df.iterrows():
+        lines.append(
+            f"{row['Številka PH']} | {row['HIS']} | {row['Objekt']} | "
+            f"Ponudba: {row['Datum ponudbe']} | Prihod: {row['Prihod']} | "
+            f"{row['Lastnik rezervacije']} | {row['Razlog']}"
+        )
+    body = "\n".join(lines)
+    return f"mailto:{recipient}?subject={quote(subject)}&body={quote(body)}"
+
+
 # ---------------------------------------------------------------------------
 # Glavna logika
 # ---------------------------------------------------------------------------
@@ -281,11 +349,52 @@ if uploaded_files:
                         worksheet.cell(row=excel_row, column=col).fill = red_fill
         output.seek(0)
 
-        st.download_button(
-            label="⬇️ Prenesi rezultate kot Excel (.xlsx)",
-            data=output,
-            file_name=f"na_cakanju_{filter_date}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        btn_col1, btn_col2, btn_col3 = st.columns(3)
+        with btn_col1:
+            st.download_button(
+                label="⬇️ Prenesi rezultate kot Excel (.xlsx)",
+                data=output,
+                file_name=f"na_cakanju_{filter_date}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+            )
+        with btn_col2:
+            print_html = build_print_html(combined, urgent_mask, filter_date)
+            components.html(
+                f"""
+                <div style="display:flex; justify-content:center;">
+                    <button onclick="printTable()" style="
+                        width:100%; padding:8px 0; font-size:14px; cursor:pointer;
+                        background-color:#31333F; color:white; border:none;
+                        border-radius:6px;">🖨️ Natisni (A4)</button>
+                </div>
+                <script>
+                function printTable() {{
+                    var w = window.open('', '_blank');
+                    w.document.write({print_html!r});
+                    w.document.close();
+                    w.focus();
+                    setTimeout(function() {{ w.print(); }}, 300);
+                }}
+                </script>
+                """,
+                height=45,
+            )
+        with btn_col3:
+            mailto_url = build_mailto_link(
+                combined, filter_date, recipient="mitja.goja@adria-ankaran.si"
+            )
+            st.link_button(
+                "📧 Pošlji kot e-mail (Outlook)",
+                url=mailto_url,
+                use_container_width=True,
+            )
+        st.caption(
+            "💡 Gumb 'Pošlji kot e-mail' odpre privzeti e-poštni odjemalec "
+            "(npr. Outlook) s pripravljeno zadevo in besedilnim povzetkom "
+            "tabele. Excel priloge zaradi omejitev brskalnika ni mogoče "
+            "samodejno pripeti - za to najprej prenesi Excel in ga ročno "
+            "priloži e-mailu."
         )
     else:
         st.info("Ni najdenih vrstic, ki bi ustrezale filtru v nobeni naloženi datoteki.")
