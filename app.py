@@ -196,14 +196,14 @@ def filter_dataframe(df: pd.DataFrame, file_name: str, filter_date, min_days, ur
     def _razlog(row):
         r = []
         if row["Dni od nastanka"] >= min_days:
-            r.append(f"Na čakanju({min_days} + dni  )")
+            r.append(f"Na čakanju enako ali več kot ({min_days} dni)")
         d = row["Dni do prihoda (od nastanka)"]
         if d is not None and d <= urgent_days:
             r.append(f"Prihod kmalu čez (1,2 {urgent_days} dni)")
         if d is not None and d > long_lead_days:
-            r.append(f"Pridejo čez {long_lead_days} dni +")
+            r.append(f"Pridejo čez {long_lead_days} dni in več")
         if not r:
-            r.append(f"Pridejo v obdobju {urgent_days + 1}-{long_lead_days} dni")
+            r.append(f"Pridejo v obdobju {urgent_days + 1}-{long_lead_days} dni (spremljaj)")
         return " + ".join(r)
 
     work["Razlog"] = work.apply(_razlog, axis=1)
@@ -264,7 +264,7 @@ _COLOR_HEX = {"red": "#ffcccc", "blue": "#cce5ff"}
 DAYS_COL = "Število preteklih dni (od nastanka)"
 
 
-def _table_html_parts(df: pd.DataFrame, color_series: pd.Series):
+def _table_html_parts(df: pd.DataFrame, color_series: pd.Series, min_days: int):
     """Vrne (header_html, rows_html) - skupna gradnja za tisk in kopiranje."""
     header_html = "".join(f"<th>{c}</th>" for c in df.columns)
     rows_html = ""
@@ -277,7 +277,7 @@ def _table_html_parts(df: pd.DataFrame, color_series: pd.Series):
             cell_style = ""
             if col_name == DAYS_COL:
                 try:
-                    if float(v) > 4:
+                    if float(v) >= min_days:
                         cell_style = ' style="font-weight:bold;"'
                 except (TypeError, ValueError):
                     pass
@@ -286,10 +286,10 @@ def _table_html_parts(df: pd.DataFrame, color_series: pd.Series):
     return header_html, rows_html
 
 
-def build_print_html(df: pd.DataFrame, color_series: pd.Series, filter_date) -> str:
+def build_print_html(df: pd.DataFrame, color_series: pd.Series, filter_date, min_days: int) -> str:
     """Zgradi samostojen HTML dokument s tabelo, oblikovan za tiskanje na A4,
     z gumbom, ki sproži tiskanje (window.print())."""
-    header_html, rows_html = _table_html_parts(df, color_series)
+    header_html, rows_html = _table_html_parts(df, color_series, min_days)
 
     return f"""
     <html>
@@ -325,11 +325,11 @@ def build_print_html(df: pd.DataFrame, color_series: pd.Series, filter_date) -> 
     """
 
 
-def build_table_html_for_clipboard(df: pd.DataFrame, color_series: pd.Series, filter_date) -> str:
+def build_table_html_for_clipboard(df: pd.DataFrame, color_series: pd.Series, filter_date, min_days: int) -> str:
     """Zgradi HTML tabelo (brez gumbov/strani), primerno za kopiranje v
     odložišče in lepljenje neposredno v telo e-maila (npr. Outlook), kjer se
     prikaže kot prava, oblikovana tabela - enako kot pri tisku."""
-    header_html, rows_html = _table_html_parts(df, color_series)
+    header_html, rows_html = _table_html_parts(df, color_series, min_days)
     return (
         f'<div style="font-family:Arial,Helvetica,sans-serif;">'
         f'<h3 style="margin:0 0 4px 0;">Rezervacije - Na čakanju</h3>'
@@ -438,7 +438,7 @@ if uploaded_files:
                 css_parts = [bg] if bg else []
                 if col_name == DAYS_COL:
                     try:
-                        if float(row[col_name]) > 4:
+                        if float(row[col_name]) >= min_days:
                             css_parts.append("font-weight: bold")
                     except (TypeError, ValueError):
                         pass
@@ -475,7 +475,7 @@ if uploaded_files:
                 days_col_idx = list(combined.columns).index(DAYS_COL) + 1  # openpyxl je 1-indeksiran
                 for excel_row, val in enumerate(combined[DAYS_COL], start=2):
                     try:
-                        if float(val) > 4:
+                        if float(val) >= min_days:
                             worksheet.cell(row=excel_row, column=days_col_idx).font = bold_font
                     except (TypeError, ValueError):
                         pass
@@ -491,7 +491,7 @@ if uploaded_files:
                 use_container_width=True,
             )
         with btn_col2:
-            print_html = build_print_html(combined, color_series, filter_date)
+            print_html = build_print_html(combined, color_series, filter_date, min_days)
             components.html(
                 f"""
                 <div style="display:flex; justify-content:center;">
@@ -513,7 +513,7 @@ if uploaded_files:
                 height=45,
             )
         with btn_col3:
-            copy_html = build_table_html_for_clipboard(combined, color_series, filter_date)
+            copy_html = build_table_html_for_clipboard(combined, color_series, filter_date, min_days)
             copy_text = build_table_text_for_clipboard(combined)
             components.html(
                 f"""
