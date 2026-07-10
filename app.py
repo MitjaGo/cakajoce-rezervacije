@@ -68,8 +68,8 @@ with narrow_col:
 st.caption(
     "Prikazane so VSE vrstice s statusom 'Na čakanju'. Barva pove nujnost: "
     f"🔴 Rdeča = prihod 0-{URGENT_DAYS} dni od nastanka (nujno preveriti). "
-    f"🟡 Rumena = prihod {URGENT_DAYS + 1}-{LONG_LEAD_DAYS} dni od nastanka. "
-    f"🔵 Svetlo modra = prihod +{LONG_LEAD_DAYS} dni od nastanka."
+    f"🟡 Rumena = {URGENT_DAYS + 1}-{LONG_LEAD_DAYS} dni od nastanka. "
+    f"🔵 Svetlo modra = +{LONG_LEAD_DAYS} dni od nastanka."
 )
 
 uploaded_files = st.file_uploader(
@@ -196,14 +196,14 @@ def filter_dataframe(df: pd.DataFrame, file_name: str, filter_date, min_days, ur
     def _razlog(row):
         r = []
         if row["Dni od nastanka"] >= min_days:
-            r.append(f"Na čakanju enako ali več kot ({min_days} dni)")
+            r.append(f"Na čakanju ({min_days} dni plus )")
         d = row["Dni do prihoda (od nastanka)"]
         if d is not None and d <= urgent_days:
             r.append(f"Prihod kmalu čez (1,2 {urgent_days} dni)")
         if d is not None and d > long_lead_days:
-            r.append(f"Pridejo čez {long_lead_days} dni in več")
+            r.append(f"{long_lead_days} dni in več")
         if not r:
-            r.append(f"Pridejo v obdobju {urgent_days + 1}-{long_lead_days} dni (spremljaj)")
+            r.append(f"{urgent_days + 1}-{long_lead_days} dni")
         return " + ".join(r)
 
     work["Razlog"] = work.apply(_razlog, axis=1)
