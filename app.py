@@ -229,7 +229,7 @@ def process_file(file, filter_date, min_days, urgent_days) -> "pd.DataFrame | No
         columns={
             "Code": "Številka PH",
             "PMS koda": "HIS",
-            "Datum nastanka": "Datum ponudbe",
+            "Datum nastanka": "Datum nastanka (ponudbe)",
             "Dni od nastanka": "Število preteklih dni (od nastanka)",
         }
     )
