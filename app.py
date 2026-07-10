@@ -52,8 +52,10 @@ Naloži od **1 do 6** XLS datotek (izvoz iz sistema PHOBS / Rezervacije na čaka
 # ---------------------------------------------------------------------------
 URGENT_DAYS = 3  # rezervacije s prihodom 1, 2 ali 3 dni po nastanku - vedno prikazane
 
-col1 = st.columns(1)
+col1, col2 = st.columns(2)
 with col1:
+    filter_date = st.date_input("Datum filtracije", value=date.today())
+with col2:
     min_days = st.number_input(
         "Min. dni od 'Datum nastanka' (dolgo čakanje)", min_value=0, value=4, step=1
     )
@@ -458,6 +460,7 @@ if uploaded_files:
         st.info("Ni najdenih vrstic, ki bi ustrezale filtru v nobeni naloženi datoteki.")
 else:
     st.info("Prosim, naloži vsaj eno XLS datoteko (do največ 6).")
+                 
                  
 
 
