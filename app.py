@@ -30,7 +30,7 @@ header_left, header_right = st.columns([4, 1])
 with header_left:
     st.title("📋 Rezervacije s statusom \"Na čakanju\"")
 with header_right:
-    st.image(LOGO_URL, width=110)
+    st.image(LOGO_URL, width=120)
 
 st.markdown(
     """
@@ -422,8 +422,8 @@ if uploaded_files:
                 <div style="display:flex; justify-content:center;">
                     <button id="copyBtn" onclick="copyTable()" style="
                         width:100%; padding:8px 0; font-size:14px; cursor:pointer;
-                        background-color:#31333F; color:white; border:none;
-                        border-radius:6px;">📋 Kopiraj tabelo</button>
+                        background-color:#197935; color:white; border:none;
+                        border-radius:6px;">📋 Kopiraj tabelo v odložišče</button>
                 </div>
                 <script>
                 async function copyTable() {{
