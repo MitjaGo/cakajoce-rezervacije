@@ -22,6 +22,7 @@ from openpyxl.styles import PatternFill
 
 st.set_page_config(page_title="Rezervacije - Na čakanju", layout="wide")
 
+st.image(LOGO_URL, width=300)
 LOGO_URL = "https://www.adria-ankaran.si//app/uploads/2025/10/logo-Adria.jpg"
 
 header_left, header_right = st.columns([4, 1])
