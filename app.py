@@ -197,7 +197,7 @@ def process_file(file, filter_date, min_days, urgent_days) -> "pd.DataFrame | No
             r.append(f"Na čakanju enako ali več kot({min_days} dni)")
         d = row["Dni do prihoda (od nastanka)"]
         if d is not None and d <= urgent_days:
-            r.append(f"Prihod kmalu (1,2 {urgent_days} dni od nastanka)")
+            r.append(f"Prihod kmalu, čez (1,2 {urgent_days} dni od nastanka)")
         return " + ".join(r)
 
     work["Razlog"] = work.apply(_razlog, axis=1)
