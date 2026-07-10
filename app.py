@@ -66,7 +66,7 @@ with narrow_col:
     )
 
 st.caption(
-    "Prikazane so VSE vrstice s statusom 'Na čakanju'. Barva pove nujnost: "
+    "Prikazane so VSE vrstice s statusom 'Na čakanju'. Barva pove nujnost koliko dni je poteklo od kreirane ponudbe do prihoda: "
     f"🔴 Rdeča = 0-{URGENT_DAYS} dni od nastanka (nujno preveriti). "
     f"🟡 Rumena = {URGENT_DAYS + 1}-{LONG_LEAD_DAYS} dni od nastanka. "
     f"🔵 Svetlo modra = +{LONG_LEAD_DAYS} dni od nastanka."
