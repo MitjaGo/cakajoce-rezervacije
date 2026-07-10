@@ -28,7 +28,7 @@ header_left, header_right = st.columns([4, 1])
 with header_left:
     st.title("📋 Filtriranje rezervacij s statusom \"Na čakanju\"")
 with header_right:
-    st.image(LOGO_URL, width=300)
+    st.image(LOGO_URL, width=150)
 
 st.markdown(
     """
