@@ -67,7 +67,7 @@ with narrow_col:
 
 st.caption(
     "Prikazane so VSE vrstice s statusom 'Na čakanju'. Barva pove nujnost: "
-    f"🔴 Rdeča = prihod 0-{URGENT_DAYS} dni od nastanka (nujno preveriti). "
+    f"🔴 Rdeča = 0-{URGENT_DAYS} dni od nastanka (nujno preveriti). "
     f"🟡 Rumena = {URGENT_DAYS + 1}-{LONG_LEAD_DAYS} dni od nastanka. "
     f"🔵 Svetlo modra = +{LONG_LEAD_DAYS} dni od nastanka."
 )
@@ -199,7 +199,7 @@ def filter_dataframe(df: pd.DataFrame, file_name: str, filter_date, min_days, ur
             r.append(f"Na čakanju ({min_days} dni plus )")
         d = row["Dni do prihoda (od nastanka)"]
         if d is not None and d <= urgent_days:
-            r.append(f"Prihod kmalu čez (1,2 {urgent_days} dni)")
+            r.append(f" Urgent (1,2 {urgent_days} dni)")
         if d is not None and d > long_lead_days:
             r.append(f"{long_lead_days} dni in več")
         if not r:
