@@ -418,7 +418,7 @@ if uploaded_files:
         color_series = combined["Razlog"].astype(str).apply(_row_color)
 
         def _highlight_row(row):
-            color = color_series.loc[row.name]
+            color = _row_color(row.get("Razlog", ""))
             css = f"background-color: {_COLOR_HEX[color]}" if color else ""
             return [css for _ in row]
 
