@@ -363,7 +363,7 @@ if uploaded_files:
             is_urgent = urgent_mask.loc[row.name]
             return ["background-color: #ffcccc" if is_urgent else "" for _ in row]
 
-        st.caption("🔴 Rdeče označene vrstice = prihod je 1-3 dni (oz. nastavljeni prag) od nastanka rezervacije - nujno preveriti.")
+        st.caption("🔴 Rdeče označene vrstice = prihod je 1-3 dni (oz. nastavljeni prag npr. 24 h ipd.) od nastanka rezervacije - nujno preveriti.")
         st.dataframe(
             combined.style.apply(_highlight_urgent, axis=1),
             use_container_width=True,
