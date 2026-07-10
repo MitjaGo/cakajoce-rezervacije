@@ -194,7 +194,7 @@ def process_file(file, filter_date, min_days, urgent_days) -> "pd.DataFrame | No
     def _razlog(row):
         r = []
         if row["Dni od nastanka"] >= min_days:
-            r.append(f"Dolgo čakanje (≥{min_days} dni)")
+            r.append(f"Na čakanju enako ali več kot({min_days} dni)")
         d = row["Dni do prihoda (od nastanka)"]
         if d is not None and d <= urgent_days:
             r.append(f"Prihod kmalu (≤{urgent_days} dni od nastanka)")
