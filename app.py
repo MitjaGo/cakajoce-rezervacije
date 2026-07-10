@@ -53,9 +53,11 @@ Naloži od **1 do 6** XLS datotek (izvoz iz sistema PHOBS / Rezervacije na čaka
 URGENT_DAYS = 3  # rezervacije s prihodom 1, 2 ali 3 dni po nastanku - vedno prikazane
 filter_date = date.today()  # datum filtracije - vedno današnji dan, skrit iz UI
 
-min_days = st.number_input(
-    "Min. dni od 'Datum nastanka' (dolgo čakanje)", min_value=0, value=4, step=1
-)
+narrow_col, _spacer = st.columns([1, 3])
+with narrow_col:
+    min_days = st.number_input(
+        "Min. dni od 'Datum nastanka' (dolgo čakanje)", min_value=0, value=4, step=1
+    )
 
 st.caption(
     "Vrstica se prikaže, če je status 'Na čakanju' IN (od nastanka je "
