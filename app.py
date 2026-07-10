@@ -28,7 +28,7 @@ header_left, header_right = st.columns([4, 1])
 with header_left:
     st.title("📋 Filtriranje rezervacij s statusom \"Na čakanju\"")
 with header_right:
-    st.image(LOGO_URL, width=150)
+    st.image(LOGO_URL, width=100)
 
 st.markdown(
     """
@@ -38,7 +38,7 @@ Naloži od **1 do 6** XLS datotek (izvoz iz PMS sistema). Aplikacija bo:
 - izračunala, koliko dni je preteklo od stolpca **Datum nastanka** do izbranega
   datuma filtracije,
 - prikazala vrstice, kjer je preteklo **N ali več dni** (privzeto 4),
-- prikazala stolpce: **Code, PMS koda, Objekt, Datum nastanka, Prihod,
+- prikazala stolpce: **Številka PH, HIS, Objekt, Datum ponudbe, Prihod,
   Lastnik rezervacije, Status**,
 - združila rezultate vseh naloženih datotek v en Excel dokument, ki ga
   prenesete na svoj računalnik.
@@ -48,26 +48,21 @@ Naloži od **1 do 6** XLS datotek (izvoz iz PMS sistema). Aplikacija bo:
 # ---------------------------------------------------------------------------
 # Nastavitve filtra
 # ---------------------------------------------------------------------------
-col1, col2, col3 = st.columns(3)
+URGENT_DAYS = 3  # rezervacije s prihodom 1, 2 ali 3 dni po nastanku - vedno prikazane
+
+col1, col2 = st.columns(2)
 with col1:
     filter_date = st.date_input("Datum filtracije", value=date.today())
 with col2:
     min_days = st.number_input(
         "Min. dni od 'Datum nastanka' (dolgo čakanje)", min_value=0, value=4, step=1
     )
-with col3:
-    urgent_days = st.number_input(
-        "Maks. dni med nastankom in prihodom (prihod kmalu)",
-        min_value=0,
-        value=3,
-        step=1,
-    )
 
 st.caption(
     "Vrstica se prikaže, če je status 'Na čakanju' IN (od nastanka je "
-    "preteklo ≥ zgornji prag DNI, ALI je bil prihod že ob rezervaciji "
-    "napovedan v roku ≤ zgornji prag PRIHOD - gost mora plačati vnaprej, "
-    "zato je treba te rezervacije nujno preveriti)."
+    f"preteklo ≥ zgornji prag DNI, ALI je prihod le {URGENT_DAYS} dni ali manj "
+    "od nastanka rezervacije - gost mora plačati vnaprej, zato je treba te "
+    "rezervacije nujno preveriti)."
 )
 
 uploaded_files = st.file_uploader(
@@ -227,7 +222,17 @@ def process_file(file, filter_date, min_days, urgent_days) -> "pd.DataFrame | No
         "Razlog",
         "Vir datoteke",
     ]
-    return work[final_cols].reset_index(drop=True)
+    result = work[final_cols].reset_index(drop=True)
+
+    # preimenovanje za prikaz/izvoz (interno branje iz XLS ostane nespremenjeno)
+    result = result.rename(
+        columns={
+            "Code": "Številka PH",
+            "PMS koda": "HIS",
+            "Datum nastanka": "Datum ponudbe",
+        }
+    )
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -240,7 +245,7 @@ if uploaded_files:
 
     all_results = []
     for f in uploaded_files:
-        res = process_file(f, filter_date, min_days, urgent_days)
+        res = process_file(f, filter_date, min_days, URGENT_DAYS)
         if res is not None and not res.empty:
             all_results.append(res)
             st.caption(f"✅ {f.name}: najdenih {len(res)} vrstic")
@@ -286,3 +291,9 @@ if uploaded_files:
         st.info("Ni najdenih vrstic, ki bi ustrezale filtru v nobeni naloženi datoteki.")
 else:
     st.info("Prosim, naloži vsaj eno XLS datoteko (do največ 6).")
+
+
+
+
+
+
