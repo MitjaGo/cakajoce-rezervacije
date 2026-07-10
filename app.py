@@ -221,7 +221,6 @@ def process_file(file, filter_date, min_days, urgent_days) -> "pd.DataFrame | No
         "Dni od nastanka",
         "Dni do prihoda (od nastanka)",
         "Razlog",
-        "Vir datoteke",
     ]
     result = work[final_cols].reset_index(drop=True)
 
