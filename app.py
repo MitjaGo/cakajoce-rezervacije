@@ -43,7 +43,7 @@ Naloži od **1 do 6** XLS datotek (izvoz iz sistema PHOBS / Rezervacije na čaka
 - prikazala stolpce: **Številka PH, HIS, Objekt, Datum ponudbe, Prihod,
   Lastnik rezervacije, Status**,
 - združila rezultate vseh naloženih datotek v en Excel dokument, ki ga
-  prenesete na svoj računalnik.
+  prenesete na svoj računalnik kot xls datoteko, kopirate v odložišče za pošiljanje v mailu (tako da odprete nov e-mail in pritisnite ctrl+V ali sprintate kot A4 format.
 """
 )
 
