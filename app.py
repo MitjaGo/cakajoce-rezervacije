@@ -1,10 +1,10 @@
 """
 Streamlit aplikacija: Filtriranje rezervacij s statusom "Na čakanju"
 ======================================================================
-Naloži 1-6 XLS izvoznih datotek (PMS sistem, HTML-tabela s pripono .xls),
+Naloži 1-6 XLS izvoznih datotek (iz Phobsa/Čakajoča plačila, datoteke s priponko .xls za vsak objekt posebej),
 filtrira vrstice s statusom "Na čakanju", kjer je od stolpca
-"Datum nastanka" do izbranega datuma filtracije preteklo N ali več dni
-(privzeto 4), združi rezultate vseh datotek v en Excel dokument in
+"Datum nastanka" do izbranega datuma filtracije preteklo od poslane ponudbe N dni ali več dni
+(N = privzeto 4 dni), združi rezultate vseh datotek v en Excel dokument in
 omogoči prenos na računalnik.
 
 Zagon:
@@ -28,7 +28,7 @@ header_left, header_right = st.columns([4, 1])
 with header_left:
     st.title("📋 Filtriranje rezervacij s statusom \"Na čakanju\"")
 with header_right:
-    st.image(LOGO_URL, width=100)
+    st.image(LOGO_URL, width=105)
 
 st.markdown(
     """
