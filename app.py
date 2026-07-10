@@ -451,9 +451,7 @@ if uploaded_files:
             "💡 Za lepo oblikovano tabelo v e-mailu: klikni **'📋 Kopiraj "
             "tabelo v odložišče'**, nato odpri nov e-mail (npr. v Outlooku) "
             "in v telo prilepi (Ctrl+V) - tabela se prilepi enako oblikovana "
-            "kot pri tisku. Excel priloge zaradi omejitev brskalnika ni mogoče "
-            "samodejno pripeti - za to najprej prenesi Excel in ga ročno "
-            "priloži e-mailu."
+            "kot pri tisku."
         )
     else:
         st.info("Ni najdenih vrstic, ki bi ustrezale filtru v nobeni naloženi datoteki.")
