@@ -23,7 +23,7 @@ from urllib.parse import quote
 import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
-from openpyxl.styles import PatternFill
+from openpyxl.styles import Font, PatternFill
 
 st.set_page_config(page_title="Rezervacije - Na čakanju", layout="wide")
 
@@ -57,7 +57,7 @@ Naloži od **1 do 6** XLS datotek (izvoz iz sistema PHOBS / Rezervacije na čaka
 # Nastavitve filtra
 # ---------------------------------------------------------------------------
 URGENT_DAYS = 3  # rezervacije s prihodom 1, 2 ali 3 dni po nastanku - vedno prikazane
-LONG_LEAD_DAYS = 10  # rezervacije s prihodom >10 dni po nastanku - za spremljati (modra)
+LONG_LEAD_DAYS = 14  # rezervacije s prihodom >14 dni po nastanku - za spremljati (modra)
 
 narrow_col, _spacer = st.columns([1, 3])
 with narrow_col:
@@ -67,11 +67,9 @@ with narrow_col:
 
 st.caption(
     "Prikazane so VSE vrstice s statusom 'Na čakanju'. Barva pove nujnost: "
-    f"🔴 rdeča = prihod je {URGENT_DAYS} dni ali manj od nastanka (gost mora "
-    "plačati vnaprej, nujno preveriti); 🔵 svetlo modra = prihod je več kot "
-    f"{LONG_LEAD_DAYS} dni od nastanka (ni nujno, a naj se preveri plačilo "
-    "pred prihodom); brez barve = na čakanju ≥ zgornji prag dni ali vmesno "
-    "obdobje."
+    f"🔴 Rdeča = prihod 0-{URGENT_DAYS} dni od nastanka (nujno preveriti). "
+    f"⚪ Brez barve = prihod {URGENT_DAYS + 1}-{LONG_LEAD_DAYS} dni od nastanka. "
+    f"🔵 Svetlo modra = prihod +{LONG_LEAD_DAYS} dni od nastanka."
 )
 
 uploaded_files = st.file_uploader(
@@ -203,9 +201,9 @@ def filter_dataframe(df: pd.DataFrame, file_name: str, filter_date, min_days, ur
         if d is not None and d <= urgent_days:
             r.append(f"Prihod kmalu čez (1,2 {urgent_days} dni)")
         if d is not None and d > long_lead_days:
-            r.append(f"Pridejo čez več kot {long_lead_days} dni (preveri plačilo)")
+            r.append(f"Pridejo čez {long_lead_days} dni in več")
         if not r:
-            r.append("V vmesnem obdobju (spremljaj)")
+            r.append(f"Pridejo v obdobju {urgent_days + 1}-{long_lead_days} dni (spremljaj)")
         return " + ".join(r)
 
     work["Razlog"] = work.apply(_razlog, axis=1)
@@ -244,21 +242,26 @@ def filter_dataframe(df: pd.DataFrame, file_name: str, filter_date, min_days, ur
     return result
 
 
-def _row_color(razlog: str) -> "str | None":
+def _row_color(razlog) -> str:
     """Vrne barvo vrstice glede na vsebino stolpca Razlog:
     - 'red'  - nujno (prihod kmalu po nastanku, ≤ URGENT_DAYS dni)
     - 'blue' - za spremljati (prihod precej oddaljen, > LONG_LEAD_DAYS dni)
-    - None   - brez posebne barve (samo dolgo čakanje, brez drugih pogojev)
+    - ''     - brez posebne barve (prazen niz, NE None - pandas Series z
+               dtype 'str' pretvori None v NaN, in bool(NaN) je True v
+               Pythonu, kar bi pomotoma sprožilo obarvanje/KeyError)
     """
     s = str(razlog)
     if "Prihod kmalu" in s:
         return "red"
     if "Pridejo čez" in s:
         return "blue"
-    return None
+    return ""
 
 
 _COLOR_HEX = {"red": "#ffcccc", "blue": "#cce5ff"}
+
+
+DAYS_COL = "Število preteklih dni (od nastanka)"
 
 
 def _table_html_parts(df: pd.DataFrame, color_series: pd.Series):
@@ -268,7 +271,17 @@ def _table_html_parts(df: pd.DataFrame, color_series: pd.Series):
     for idx, row in df.iterrows():
         color = color_series.loc[idx]
         row_style = f' style="background-color:{_COLOR_HEX[color]};"' if color else ""
-        cells = "".join(f"<td>{'' if pd.isna(v) else v}</td>" for v in row)
+        cells = ""
+        for col_name, v in row.items():
+            val = "" if pd.isna(v) else v
+            cell_style = ""
+            if col_name == DAYS_COL:
+                try:
+                    if float(v) > 4:
+                        cell_style = ' style="font-weight:bold;"'
+                except (TypeError, ValueError):
+                    pass
+            cells += f"<td{cell_style}>{val}</td>"
         rows_html += f"<tr{row_style}>{cells}</tr>"
     return header_html, rows_html
 
@@ -419,13 +432,23 @@ if uploaded_files:
 
         def _highlight_row(row):
             color = _row_color(row.get("Razlog", ""))
-            css = f"background-color: {_COLOR_HEX[color]}" if color else ""
-            return [css for _ in row]
+            bg = f"background-color: {_COLOR_HEX[color]}" if color else ""
+            styles = []
+            for col_name in row.index:
+                css_parts = [bg] if bg else []
+                if col_name == DAYS_COL:
+                    try:
+                        if float(row[col_name]) > 4:
+                            css_parts.append("font-weight: bold")
+                    except (TypeError, ValueError):
+                        pass
+                styles.append("; ".join(css_parts))
+            return styles
 
         st.caption(
-            "🔴 Rdeče = prihod je 1-3 dni od nastanka rezervacije - nujno preveriti. "
-            f"🔵 Svetlo modro = prihod je več kot {LONG_LEAD_DAYS} dni od nastanka - "
-            "ni nujno, a naj se preveri plačilo pred prihodom."
+            f"🔴 Rdeča = prihod 0-{URGENT_DAYS} dni od nastanka. "
+            f"⚪ Brez barve = prihod {URGENT_DAYS + 1}-{LONG_LEAD_DAYS} dni od nastanka. "
+            f"🔵 Svetlo modra = prihod +{LONG_LEAD_DAYS} dni od nastanka."
         )
         st.dataframe(
             combined.style.apply(_highlight_row, axis=1),
@@ -441,11 +464,21 @@ if uploaded_files:
                 "red": PatternFill(start_color="FFCCCC", end_color="FFCCCC", fill_type="solid"),
                 "blue": PatternFill(start_color="CCE5FF", end_color="CCE5FF", fill_type="solid"),
             }
+            bold_font = Font(bold=True)
             n_cols = combined.shape[1]
             for excel_row, color in enumerate(color_series, start=2):  # vrstica 1 = header
                 if color:
                     for col in range(1, n_cols + 1):
                         worksheet.cell(row=excel_row, column=col).fill = fills[color]
+
+            if DAYS_COL in combined.columns:
+                days_col_idx = list(combined.columns).index(DAYS_COL) + 1  # openpyxl je 1-indeksiran
+                for excel_row, val in enumerate(combined[DAYS_COL], start=2):
+                    try:
+                        if float(val) > 4:
+                            worksheet.cell(row=excel_row, column=days_col_idx).font = bold_font
+                    except (TypeError, ValueError):
+                        pass
         output.seek(0)
 
         btn_col1, btn_col2, btn_col3 = st.columns(3)
