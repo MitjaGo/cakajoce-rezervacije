@@ -28,13 +28,13 @@ LOGO_URL = "https://www.adria-ankaran.si//app/uploads/2025/10/logo-Adria.jpg"
 
 header_left, header_right = st.columns([4, 1])
 with header_left:
-    st.title("📋 Rezervacije iz Phobsa s statusom NA ČAKANJU")
+    st.title("📋 Filtriranje rezervacij s statusom \"Na čakanju\"")
 with header_right:
-    st.image(LOGO_URL, width=110)
+    st.image(LOGO_URL, width=300)
 
 st.markdown(
     """
-Naloži od **1 do 6** XLS datotek (izvoz iz PHOBSA po objektu). Aplikacija bo:
+Naloži od **1 do 6** XLS datotek (izvoz iz PMS sistema). Aplikacija bo:
 - prebrala podatke iz vsake datoteke,
 - obdržala samo vrstice s statusom **Na čakanju**,
 - izračunala, koliko dni je preteklo od stolpca **Datum nastanka** do izbranega
@@ -237,17 +237,21 @@ def process_file(file, filter_date, min_days, urgent_days) -> "pd.DataFrame | No
     return result
 
 
-def build_print_html(df: pd.DataFrame, urgent_mask: pd.Series, filter_date) -> str:
-    """Zgradi samostojen HTML dokument s tabelo, oblikovan za tiskanje na A4,
-    z gumbom, ki sproži tiskanje (window.print())."""
-    header_html = "".join(
-        f"<th>{c}</th>" for c in df.columns
-    )
+def _table_html_parts(df: pd.DataFrame, urgent_mask: pd.Series):
+    """Vrne (header_html, rows_html) - skupna gradnja za tisk in kopiranje."""
+    header_html = "".join(f"<th>{c}</th>" for c in df.columns)
     rows_html = ""
     for idx, row in df.iterrows():
         row_style = ' style="background-color:#ffcccc;"' if urgent_mask.loc[idx] else ""
         cells = "".join(f"<td>{'' if pd.isna(v) else v}</td>" for v in row)
         rows_html += f"<tr{row_style}>{cells}</tr>"
+    return header_html, rows_html
+
+
+def build_print_html(df: pd.DataFrame, urgent_mask: pd.Series, filter_date) -> str:
+    """Zgradi samostojen HTML dokument s tabelo, oblikovan za tiskanje na A4,
+    z gumbom, ki sproži tiskanje (window.print())."""
+    header_html, rows_html = _table_html_parts(df, urgent_mask)
 
     return f"""
     <html>
@@ -283,14 +287,44 @@ def build_print_html(df: pd.DataFrame, urgent_mask: pd.Series, filter_date) -> s
     """
 
 
+def build_table_html_for_clipboard(df: pd.DataFrame, urgent_mask: pd.Series, filter_date) -> str:
+    """Zgradi HTML tabelo (brez gumbov/strani), primerno za kopiranje v
+    odložišče in lepljenje neposredno v telo e-maila (npr. Outlook), kjer se
+    prikaže kot prava, oblikovana tabela - enako kot pri tisku."""
+    header_html, rows_html = _table_html_parts(df, urgent_mask)
+    return (
+        f'<div style="font-family:Arial,Helvetica,sans-serif;">'
+        f'<h3 style="margin:0 0 4px 0;">Rezervacije - Na čakanju</h3>'
+        f'<p style="margin:0 0 10px 0;color:#555;font-size:12px;">'
+        f'Datum filtracije: {filter_date} &middot; Skupno vrstic: {len(df)}</p>'
+        f'<table style="border-collapse:collapse;width:100%;">'
+        f'<thead><tr>{header_html.replace("<th>", "<th style=\'border:1px solid #999;padding:4px 6px;background:#f0f0f0;font-size:11px;text-align:left;\'>")}</tr></thead>'
+        f'<tbody>{rows_html.replace("<td>", "<td style=\'border:1px solid #999;padding:4px 6px;font-size:11px;\'>")}</tbody>'
+        f'</table></div>'
+    )
+
+
+def build_table_text_for_clipboard(df: pd.DataFrame) -> str:
+    """Navadno-tekstovna (tab-ločena) različica tabele - kot rezervni format
+    za odložišče (npr. za lepljenje v Excel)."""
+    lines = ["\t".join(str(c) for c in df.columns)]
+    for _, row in df.iterrows():
+        lines.append("\t".join("" if pd.isna(v) else str(v) for v in row))
+    return "\n".join(lines)
+
+
 def build_mailto_link(df: pd.DataFrame, filter_date, recipient: str = "") -> str:
-    """Zgradi mailto: povezavo s preprostim tekstovnim povzetkom tabele.
-    Klik odpre privzeti e-poštni odjemalec (npr. Outlook) z izpolnjeno
-    zadevo in vsebino."""
+    """Zgradi mailto: povezavo. Ker mailto ne podpira HTML telesa, doda
+    napotek za lepljenje predhodno kopirane tabele (gumb 'Kopiraj tabelo'),
+    pod njim pa še preprost tekstovni povzetek kot rezervo."""
     subject = f"Rezervacije na čakanju - {filter_date}"
     lines = [
+        "Tukaj prilepi tabelo (Ctrl+V) - najprej klikni gumb 'Kopiraj tabelo':",
+        "",
+        "",
+        "---",
         f"Rezervacije s statusom 'Na čakanju' na dan {filter_date} "
-        f"(skupno {len(df)} vrstic):",
+        f"(skupno {len(df)} vrstic) - tekstovni povzetek:",
         "",
     ]
     for _, row in df.iterrows():
@@ -349,10 +383,10 @@ if uploaded_files:
                         worksheet.cell(row=excel_row, column=col).fill = red_fill
         output.seek(0)
 
-        btn_col1, btn_col2, btn_col3 = st.columns(3)
+        btn_col1, btn_col2, btn_col3, btn_col4 = st.columns(4)
         with btn_col1:
             st.download_button(
-                label="⬇️ Prenesi rezultate kot Excel (.xlsx)",
+                label="⬇️ Prenesi kot Excel (.xlsx)",
                 data=output,
                 file_name=f"na_cakanju_{filter_date}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -381,20 +415,54 @@ if uploaded_files:
                 height=45,
             )
         with btn_col3:
+            copy_html = build_table_html_for_clipboard(combined, urgent_mask, filter_date)
+            copy_text = build_table_text_for_clipboard(combined)
+            components.html(
+                f"""
+                <div style="display:flex; justify-content:center;">
+                    <button id="copyBtn" onclick="copyTable()" style="
+                        width:100%; padding:8px 0; font-size:14px; cursor:pointer;
+                        background-color:#31333F; color:white; border:none;
+                        border-radius:6px;">📋 Kopiraj tabelo</button>
+                </div>
+                <script>
+                async function copyTable() {{
+                    var btn = document.getElementById('copyBtn');
+                    var htmlContent = {copy_html!r};
+                    var textContent = {copy_text!r};
+                    try {{
+                        var item = new ClipboardItem({{
+                            'text/html': new Blob([htmlContent], {{type: 'text/html'}}),
+                            'text/plain': new Blob([textContent], {{type: 'text/plain'}})
+                        }});
+                        await navigator.clipboard.write([item]);
+                        btn.innerText = '✅ Kopirano!';
+                    }} catch (err) {{
+                        btn.innerText = '⚠️ Kopiranje ni uspelo';
+                        console.error(err);
+                    }}
+                    setTimeout(function() {{ btn.innerText = '📋 Kopiraj tabelo'; }}, 2500);
+                }}
+                </script>
+                """,
+                height=45,
+            )
+        with btn_col4:
             mailto_url = build_mailto_link(
                 combined, filter_date, recipient="mitja.goja@adria-ankaran.si"
             )
             st.link_button(
-                "📧 Pošlji kot e-mail (Outlook)",
+                "📧 Pošlji kot e-mail",
                 url=mailto_url,
                 use_container_width=True,
             )
         st.caption(
-            "💡 Gumb 'Pošlji kot e-mail' odpre privzeti e-poštni odjemalec "
-            "(npr. Outlook) s pripravljeno zadevo in besedilnim povzetkom "
-            "tabele. Excel priloge zaradi omejitev brskalnika ni mogoče "
-            "samodejno pripeti - za to najprej prenesi Excel in ga ročno "
-            "priloži e-mailu."
+            "💡 Za lepo oblikovano tabelo v e-mailu: najprej klikni **'📋 Kopiraj "
+            "tabelo'**, nato **'📧 Pošlji kot e-mail'** (odpre Outlook) in v telo "
+            "e-maila prilepi (Ctrl+V) - tabela se prilepi enako oblikovana kot pri "
+            "tisku. Excel priloge zaradi omejitev brskalnika ni mogoče samodejno "
+            "pripeti - za to najprej prenesi Excel in ga ročno priloži e-mailu."
+
         )
     else:
         st.info("Ni najdenih vrstic, ki bi ustrezale filtru v nobeni naloženi datoteki.")
