@@ -68,7 +68,7 @@ with narrow_col:
 st.caption(
     "Prikazane so VSE vrstice s statusom 'Na čakanju'. Barva pove nujnost: "
     f"🔴 Rdeča = prihod 0-{URGENT_DAYS} dni od nastanka (nujno preveriti). "
-    f"⚪ Brez barve = prihod {URGENT_DAYS + 1}-{LONG_LEAD_DAYS} dni od nastanka. "
+    f"🟡 Rumena = prihod {URGENT_DAYS + 1}-{LONG_LEAD_DAYS} dni od nastanka. "
     f"🔵 Svetlo modra = prihod +{LONG_LEAD_DAYS} dni od nastanka."
 )
 
@@ -201,9 +201,9 @@ def filter_dataframe(df: pd.DataFrame, file_name: str, filter_date, min_days, ur
         if d is not None and d <= urgent_days:
             r.append(f"Prihod kmalu čez (1,2 {urgent_days} dni)")
         if d is not None and d > long_lead_days:
-            r.append(f" Prihod {long_lead_days} dni + (od nastanka)")
+            r.append(f"Pridejo čez {long_lead_days} dni in več")
         if not r:
-            r.append(f"Prihod {urgent_days + 1}-{long_lead_days} dni")
+            r.append(f"Pridejo v obdobju {urgent_days + 1}-{long_lead_days} dni (spremljaj)")
         return " + ".join(r)
 
     work["Razlog"] = work.apply(_razlog, axis=1)
@@ -242,23 +242,30 @@ def filter_dataframe(df: pd.DataFrame, file_name: str, filter_date, min_days, ur
     return result
 
 
-def _row_color(razlog) -> str:
-    """Vrne barvo vrstice glede na vsebino stolpca Razlog:
-    - 'red'  - nujno (prihod kmalu po nastanku, ≤ URGENT_DAYS dni)
-    - 'blue' - za spremljati (prihod precej oddaljen, > LONG_LEAD_DAYS dni)
-    - ''     - brez posebne barve (prazen niz, NE None - pandas Series z
-               dtype 'str' pretvori None v NaN, in bool(NaN) je True v
-               Pythonu, kar bi pomotoma sprožilo obarvanje/KeyError)
+def _color_for_arrival_days(dni_do_prihoda, urgent_days, long_lead_days) -> str:
+    """Vrne barvo vrstice glede na 'Dni do prihoda (od nastanka)':
+    - 'red'    - nujno (0 do urgent_days dni)
+    - 'yellow' - za spremljati (urgent_days+1 do long_lead_days dni)
+    - 'blue'   - za spremljati (> long_lead_days dni)
+    - ''       - ni podatka o prihodu (prazen niz, NE None - glej opombo
+                 spodaj o pandas 'str' dtype in NaN)
     """
-    s = str(razlog)
-    if "Prihod kmalu" in s:
+    if dni_do_prihoda is None:
+        return ""
+    try:
+        d = float(dni_do_prihoda)
+    except (TypeError, ValueError):
+        return ""
+    if pd.isna(d):
+        return ""
+    if d <= urgent_days:
         return "red"
-    if "Pridejo čez" in s:
+    if d > long_lead_days:
         return "blue"
-    return ""
+    return "yellow"
 
 
-_COLOR_HEX = {"red": "#ffcccc", "blue": "#cce5ff"}
+_COLOR_HEX = {"red": "#ffcccc", "blue": "#cce5ff", "yellow": "#fff3b0"}
 
 
 DAYS_COL = "Število preteklih dni (od nastanka)"
@@ -428,10 +435,13 @@ if uploaded_files:
         combined.index = combined.index + 1  # zaporedna številka naj se začne pri 1
         st.success(f"Skupno najdenih {len(combined)} vrstic, ki ustrezajo pogojem.")
 
-        color_series = combined["Razlog"].astype(str).apply(_row_color)
+        ARRIVAL_COL = "Dni do prihoda (od nastanka)"
+        color_series = combined[ARRIVAL_COL].apply(
+            lambda d: _color_for_arrival_days(d, URGENT_DAYS, LONG_LEAD_DAYS)
+        )
 
         def _highlight_row(row):
-            color = _row_color(row.get("Razlog", ""))
+            color = _color_for_arrival_days(row.get(ARRIVAL_COL), URGENT_DAYS, LONG_LEAD_DAYS)
             bg = f"background-color: {_COLOR_HEX[color]}" if color else ""
             styles = []
             for col_name in row.index:
@@ -447,7 +457,7 @@ if uploaded_files:
 
         st.caption(
             f"🔴 Rdeča = prihod 0-{URGENT_DAYS} dni od nastanka. "
-            f"⚪ Brez barve = prihod {URGENT_DAYS + 1}-{LONG_LEAD_DAYS} dni od nastanka. "
+            f"🟡 Rumena = prihod {URGENT_DAYS + 1}-{LONG_LEAD_DAYS} dni od nastanka. "
             f"🔵 Svetlo modra = prihod +{LONG_LEAD_DAYS} dni od nastanka."
         )
         st.dataframe(
@@ -455,7 +465,7 @@ if uploaded_files:
             use_container_width=True,
         )
 
-        # Excel za prenos (z rdečo/modro osvetlitvijo vrstic glede na kategorijo)
+        # Excel za prenos (z rdečo/rumeno/modro osvetlitvijo vrstic glede na kategorijo)
         output = BytesIO()
         with pd.ExcelWriter(output, engine="openpyxl") as writer:
             combined.to_excel(writer, index=False, sheet_name="Na čakanju")
@@ -463,6 +473,7 @@ if uploaded_files:
             fills = {
                 "red": PatternFill(start_color="FFCCCC", end_color="FFCCCC", fill_type="solid"),
                 "blue": PatternFill(start_color="CCE5FF", end_color="CCE5FF", fill_type="solid"),
+                "yellow": PatternFill(start_color="FFF3B0", end_color="FFF3B0", fill_type="solid"),
             }
             bold_font = Font(bold=True)
             n_cols = combined.shape[1]
