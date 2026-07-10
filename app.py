@@ -18,10 +18,17 @@ from io import BytesIO
 
 import pandas as pd
 import streamlit as st
+from openpyxl.styles import PatternFill
 
 st.set_page_config(page_title="Rezervacije - Na čakanju", layout="wide")
 
-st.title("📋 Filtriranje rezervacij s statusom \"Na čakanju\"")
+LOGO_URL = "https://www.adria-ankaran.si//app/uploads/2025/10/logo-Adria.jpg"
+
+header_left, header_right = st.columns([4, 1])
+with header_left:
+    st.title("📋 Filtriranje rezervacij s statusom \"Na čakanju\"")
+with header_right:
+    st.image(LOGO_URL, use_container_width=True)
 
 st.markdown(
     """
@@ -41,13 +48,27 @@ Naloži od **1 do 6** XLS datotek (izvoz iz PMS sistema). Aplikacija bo:
 # ---------------------------------------------------------------------------
 # Nastavitve filtra
 # ---------------------------------------------------------------------------
-col1, col2 = st.columns(2)
+col1, col2, col3 = st.columns(3)
 with col1:
     filter_date = st.date_input("Datum filtracije", value=date.today())
 with col2:
     min_days = st.number_input(
-        "Minimalno število dni od 'Datum nastanka'", min_value=0, value=4, step=1
+        "Min. dni od 'Datum nastanka' (dolgo čakanje)", min_value=0, value=4, step=1
     )
+with col3:
+    urgent_days = st.number_input(
+        "Maks. dni med nastankom in prihodom (prihod kmalu)",
+        min_value=0,
+        value=3,
+        step=1,
+    )
+
+st.caption(
+    "Vrstica se prikaže, če je status 'Na čakanju' IN (od nastanka je "
+    "preteklo ≥ zgornji prag DNI, ALI je bil prihod že ob rezervaciji "
+    "napovedan v roku ≤ zgornji prag PRIHOD - gost mora plačati vnaprej, "
+    "zato je treba te rezervacije nujno preveriti)."
+)
 
 uploaded_files = st.file_uploader(
     "Naloži XLS datoteke (1-6 datotek)",
@@ -128,7 +149,7 @@ def parse_date(val):
         return None
 
 
-def process_file(file, filter_date, min_days) -> "pd.DataFrame | None":
+def process_file(file, filter_date, min_days, urgent_days) -> "pd.DataFrame | None":
     df = parse_file(file)
     if df is None:
         return None
@@ -140,8 +161,9 @@ def process_file(file, filter_date, min_days) -> "pd.DataFrame | None":
 
     work = df[REQUIRED_COLS].copy()
 
-    # razpar-anje datuma nastanka
+    # razpar-anje datumov
     work["_datum_nastanka_parsed"] = work["Datum nastanka"].apply(parse_date)
+    work["_prihod_parsed"] = work["Prihod"].apply(parse_date)
     work = work.dropna(subset=["_datum_nastanka_parsed"])
 
     # filter statusa - "Na čakanju" (case-insensitive, robustno na HTML/presledke)
@@ -151,14 +173,38 @@ def process_file(file, filter_date, min_days) -> "pd.DataFrame | None":
     if work.empty:
         return work
 
-    # dni od nastanka do datuma filtracije
+    # dni od nastanka do datuma filtracije (dolgo čakanje)
     work["Dni od nastanka"] = work["_datum_nastanka_parsed"].apply(
         lambda d: (filter_date - d).days
     )
-    work = work[work["Dni od nastanka"] >= min_days]
+    dolgo_cakanje = work["Dni od nastanka"] >= min_days
 
+    # dni med nastankom rezervacije in prihodom gosta (prihod kmalu = nujno,
+    # ker gost mora plačati vnaprej, rok za urejanje je kratek)
+    work["Dni do prihoda (od nastanka)"] = work.apply(
+        lambda r: (r["_prihod_parsed"] - r["_datum_nastanka_parsed"]).days
+        if pd.notna(r["_prihod_parsed"])
+        else None,
+        axis=1,
+    )
+    prihod_kmalu = work["Dni do prihoda (od nastanka)"].apply(
+        lambda v: v is not None and v <= urgent_days
+    )
+
+    work = work[dolgo_cakanje | prihod_kmalu]
     if work.empty:
         return work
+
+    def _razlog(row):
+        r = []
+        if row["Dni od nastanka"] >= min_days:
+            r.append(f"Dolgo čakanje (≥{min_days} dni)")
+        d = row["Dni do prihoda (od nastanka)"]
+        if d is not None and d <= urgent_days:
+            r.append(f"Prihod kmalu (≤{urgent_days} dni od nastanka)")
+        return " + ".join(r)
+
+    work["Razlog"] = work.apply(_razlog, axis=1)
 
     work["PMS koda"] = work["PMS koda"].apply(extract_number)
     work["Code"] = work["Code"].astype(str).str.strip()
@@ -177,6 +223,8 @@ def process_file(file, filter_date, min_days) -> "pd.DataFrame | None":
         "Lastnik rezervacije",
         "Status",
         "Dni od nastanka",
+        "Dni do prihoda (od nastanka)",
+        "Razlog",
         "Vir datoteke",
     ]
     return work[final_cols].reset_index(drop=True)
@@ -192,7 +240,7 @@ if uploaded_files:
 
     all_results = []
     for f in uploaded_files:
-        res = process_file(f, filter_date, min_days)
+        res = process_file(f, filter_date, min_days, urgent_days)
         if res is not None and not res.empty:
             all_results.append(res)
             st.caption(f"✅ {f.name}: najdenih {len(res)} vrstic")
@@ -202,12 +250,30 @@ if uploaded_files:
     if all_results:
         combined = pd.concat(all_results, ignore_index=True)
         st.success(f"Skupno najdenih {len(combined)} vrstic, ki ustrezajo pogojem.")
-        st.dataframe(combined, use_container_width=True)
 
-        # Excel za prenos
+        urgent_mask = combined["Razlog"].astype(str).str.contains("Prihod kmalu")
+
+        def _highlight_urgent(row):
+            is_urgent = urgent_mask.loc[row.name]
+            return ["background-color: #ffcccc" if is_urgent else "" for _ in row]
+
+        st.caption("🔴 Rdeče označene vrstice = prihod je 1-3 dni (oz. nastavljeni prag) od nastanka rezervacije - nujno preveriti.")
+        st.dataframe(
+            combined.style.apply(_highlight_urgent, axis=1),
+            use_container_width=True,
+        )
+
+        # Excel za prenos (z rdečo osvetlitvijo vrstic "prihod kmalu")
         output = BytesIO()
         with pd.ExcelWriter(output, engine="openpyxl") as writer:
             combined.to_excel(writer, index=False, sheet_name="Na čakanju")
+            worksheet = writer.sheets["Na čakanju"]
+            red_fill = PatternFill(start_color="FFCCCC", end_color="FFCCCC", fill_type="solid")
+            n_cols = combined.shape[1]
+            for excel_row, is_urgent in enumerate(urgent_mask, start=2):  # vrstica 1 = header
+                if is_urgent:
+                    for col in range(1, n_cols + 1):
+                        worksheet.cell(row=excel_row, column=col).fill = red_fill
         output.seek(0)
 
         st.download_button(
