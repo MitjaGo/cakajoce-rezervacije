@@ -3,7 +3,10 @@ Streamlit aplikacija: Filtriranje rezervacij s statusom "Na čakanju"
 ======================================================================
 Naloži 1-6 XLS izvoznih datotek (PMS sistem, HTML-tabela s pripono .xls),
 filtrira vrstice s statusom "Na čakanju", kjer je od stolpca
-"Datum nastanka" do današnjega dne preteklo N ali več dni (privzeto 4),
+"Datum nastanka" do referenčnega datuma preteklo N ali več dni (privzeto 4).
+Referenčni datum NI sistemski "danes" (ker je lahko ura strežnika napačna),
+ampak se izračuna samodejno iz podatkov - kot najnovejši datum, ki se
+pojavi v stolpcu "Datum nastanka" med vsemi naloženimi datotekami. Aplikacija
 združi rezultate vseh datotek v en Excel dokument in omogoči prenos na
 računalnik.
 
@@ -37,8 +40,11 @@ st.markdown(
 Naloži od **1 do 6** XLS datotek (izvoz iz sistema PHOBS / Rezervacije na čakanju, označi pred prenosom v excel samo rezervacije s statusom na čakanju obarvane z oranžno ali rumeno barvo ). 
 
 - Aplikacija bo prebrala podatke iz vsake datoteke,
-- izračunala, koliko dni je preteklo od stolpca **Datum nastanka** do
-  današnjega dne,
+- samodejno ugotovila referenčni datum ("danes") kot **najnovejši datum v
+  stolpcu Datum nastanka** med vsemi naloženimi podatki (ne zanaša se na
+  sistemsko uro strežnika),
+- izračunala, koliko dni je preteklo od stolpca **Datum nastanka** do tega
+  referenčnega datuma,
 - prikazala vrstice, kjer je preteklo **N ali več dni** (privzeto 4),
 - prikazala stolpce: **Številka PH, HIS, Objekt, Datum ponudbe, Prihod,
   Lastnik rezervacije, Status**,
@@ -51,7 +57,7 @@ Naloži od **1 do 6** XLS datotek (izvoz iz sistema PHOBS / Rezervacije na čaka
 # Nastavitve filtra
 # ---------------------------------------------------------------------------
 URGENT_DAYS = 3  # rezervacije s prihodom 1, 2 ali 3 dni po nastanku - vedno prikazane
-filter_date = date.today()  # datum filtracije - vedno današnji dan, skrit iz UI
+LONG_LEAD_DAYS = 10  # rezervacije s prihodom >10 dni po nastanku - za spremljati (modra)
 
 narrow_col, _spacer = st.columns([1, 3])
 with narrow_col:
@@ -63,7 +69,8 @@ st.caption(
     "Vrstica se prikaže, če je status 'Na čakanju' IN (od nastanka je "
     f"preteklo ≥ zgornji prag DNI, ALI je prihod le {URGENT_DAYS} dni ali manj "
     "od nastanka rezervacije - gost mora plačati vnaprej, zato je treba te "
-    "rezervacije nujno preveriti)."
+    f"rezervacije nujno preveriti, ALI je prihod več kot {LONG_LEAD_DAYS} dni "
+    "od nastanka - te niso nujne, a naj se preveri plačilo pred prihodom)."
 )
 
 uploaded_files = st.file_uploader(
@@ -145,14 +152,12 @@ def parse_date(val):
         return None
 
 
-def process_file(file, filter_date, min_days, urgent_days) -> "pd.DataFrame | None":
-    df = parse_file(file)
-    if df is None:
-        return None
-
+def filter_dataframe(df: pd.DataFrame, file_name: str, filter_date, min_days, urgent_days, long_lead_days) -> "pd.DataFrame | None":
+    """Filtrira že prebran DataFrame (glej parse_file) glede na status
+    'Na čakanju' in datumske pogoje, relativno na podan filter_date."""
     missing = [c for c in REQUIRED_COLS if c not in df.columns]
     if missing:
-        st.error(f"Datoteka **{file.name}** nima pričakovanih stolpcev: {missing}")
+        st.error(f"Datoteka **{file_name}** nima pričakovanih stolpcev: {missing}")
         return None
 
     work = df[REQUIRED_COLS].copy()
@@ -169,7 +174,7 @@ def process_file(file, filter_date, min_days, urgent_days) -> "pd.DataFrame | No
     if work.empty:
         return work
 
-    # dni od nastanka do datuma filtracije (dolgo čakanje)
+    # dni od nastanka do referenčnega datuma (dolgo čakanje)
     work["Dni od nastanka"] = work["_datum_nastanka_parsed"].apply(
         lambda d: (filter_date - d).days
     )
@@ -187,7 +192,13 @@ def process_file(file, filter_date, min_days, urgent_days) -> "pd.DataFrame | No
         lambda v: v is not None and v <= urgent_days
     )
 
-    work = work[dolgo_cakanje | prihod_kmalu]
+    # prihod je precej oddaljen od nastanka (>10 dni) - ni nujno, a naj se
+    # spremlja, da se plačilo preveri pred prihodom
+    prihod_dolgo_narazen = work["Dni do prihoda (od nastanka)"].apply(
+        lambda v: v is not None and v > long_lead_days
+    )
+
+    work = work[dolgo_cakanje | prihod_kmalu | prihod_dolgo_narazen]
     if work.empty:
         return work
 
@@ -198,6 +209,8 @@ def process_file(file, filter_date, min_days, urgent_days) -> "pd.DataFrame | No
         d = row["Dni do prihoda (od nastanka)"]
         if d is not None and d <= urgent_days:
             r.append(f"Prihod kmalu čez (1,2 {urgent_days} dni)")
+        if d is not None and d > long_lead_days:
+            r.append(f"Pridejo čez več kot {long_lead_days} dni (preveri plačilo)")
         return " + ".join(r)
 
     work["Razlog"] = work.apply(_razlog, axis=1)
@@ -208,7 +221,7 @@ def process_file(file, filter_date, min_days, urgent_days) -> "pd.DataFrame | No
     work["Datum nastanka"] = work["_datum_nastanka_parsed"].astype(str)
     work["Prihod"] = work["Prihod"].astype(str).str.strip()
     work["Lastnik rezervacije"] = work["Lastnik rezervacije"].astype(str).str.strip()
-    work["Vir datoteke"] = file.name
+    work["Vir datoteke"] = file_name
 
     final_cols = [
         "Code",
@@ -236,21 +249,39 @@ def process_file(file, filter_date, min_days, urgent_days) -> "pd.DataFrame | No
     return result
 
 
-def _table_html_parts(df: pd.DataFrame, urgent_mask: pd.Series):
+def _row_color(razlog: str) -> "str | None":
+    """Vrne barvo vrstice glede na vsebino stolpca Razlog:
+    - 'red'  - nujno (prihod kmalu po nastanku, ≤ URGENT_DAYS dni)
+    - 'blue' - za spremljati (prihod precej oddaljen, > LONG_LEAD_DAYS dni)
+    - None   - brez posebne barve (samo dolgo čakanje, brez drugih pogojev)
+    """
+    s = str(razlog)
+    if "Prihod kmalu" in s:
+        return "red"
+    if "Pridejo čez" in s:
+        return "blue"
+    return None
+
+
+_COLOR_HEX = {"red": "#ffcccc", "blue": "#cce5ff"}
+
+
+def _table_html_parts(df: pd.DataFrame, color_series: pd.Series):
     """Vrne (header_html, rows_html) - skupna gradnja za tisk in kopiranje."""
     header_html = "".join(f"<th>{c}</th>" for c in df.columns)
     rows_html = ""
     for idx, row in df.iterrows():
-        row_style = ' style="background-color:#ffcccc;"' if urgent_mask.loc[idx] else ""
+        color = color_series.loc[idx]
+        row_style = f' style="background-color:{_COLOR_HEX[color]};"' if color else ""
         cells = "".join(f"<td>{'' if pd.isna(v) else v}</td>" for v in row)
         rows_html += f"<tr{row_style}>{cells}</tr>"
     return header_html, rows_html
 
 
-def build_print_html(df: pd.DataFrame, urgent_mask: pd.Series, filter_date) -> str:
+def build_print_html(df: pd.DataFrame, color_series: pd.Series, filter_date) -> str:
     """Zgradi samostojen HTML dokument s tabelo, oblikovan za tiskanje na A4,
     z gumbom, ki sproži tiskanje (window.print())."""
-    header_html, rows_html = _table_html_parts(df, urgent_mask)
+    header_html, rows_html = _table_html_parts(df, color_series)
 
     return f"""
     <html>
@@ -276,7 +307,7 @@ def build_print_html(df: pd.DataFrame, urgent_mask: pd.Series, filter_date) -> s
     <body>
         <button id="printBtn" onclick="window.print()">🖨️ Natisni na A4</button>
         <h2>Rezervacije - Na čakanju</h2>
-        <p class="meta">Datum filtracije: {filter_date} · Skupno vrstic: {len(df)}</p>
+        <p class="meta">Referenčni datum: {filter_date} · Skupno vrstic: {len(df)}</p>
         <table>
             <thead><tr>{header_html}</tr></thead>
             <tbody>{rows_html}</tbody>
@@ -286,16 +317,16 @@ def build_print_html(df: pd.DataFrame, urgent_mask: pd.Series, filter_date) -> s
     """
 
 
-def build_table_html_for_clipboard(df: pd.DataFrame, urgent_mask: pd.Series, filter_date) -> str:
+def build_table_html_for_clipboard(df: pd.DataFrame, color_series: pd.Series, filter_date) -> str:
     """Zgradi HTML tabelo (brez gumbov/strani), primerno za kopiranje v
     odložišče in lepljenje neposredno v telo e-maila (npr. Outlook), kjer se
     prikaže kot prava, oblikovana tabela - enako kot pri tisku."""
-    header_html, rows_html = _table_html_parts(df, urgent_mask)
+    header_html, rows_html = _table_html_parts(df, color_series)
     return (
         f'<div style="font-family:Arial,Helvetica,sans-serif;">'
         f'<h3 style="margin:0 0 4px 0;">Rezervacije - Na čakanju</h3>'
         f'<p style="margin:0 0 10px 0;color:#555;font-size:12px;">'
-        f'Datum filtracije: {filter_date} &middot; Skupno vrstic: {len(df)}</p>'
+        f'Referenčni datum: {filter_date} &middot; Skupno vrstic: {len(df)}</p>'
         f'<table style="border-collapse:collapse;width:100%;">'
         f'<thead><tr>{header_html.replace("<th>", "<th style=\'border:1px solid #999;padding:4px 6px;background:#f0f0f0;font-size:11px;text-align:left;\'>")}</tr></thead>'
         f'<tbody>{rows_html.replace("<td>", "<td style=\'border:1px solid #999;padding:4px 6px;font-size:11px;\'>")}</tbody>'
@@ -328,9 +359,8 @@ def build_mailto_link(df: pd.DataFrame, filter_date, recipient: str = "") -> str
     ]
     for _, row in df.iterrows():
         lines.append(
-            f"{row['Številka PH']} | {row['HIS']} | {row['Objekt']} | "
-            f"Ponudba: {row['Datum ponudbe']} | Prihod: {row['Prihod']} | "
-            f"{row['Lastnik rezervacije']} | {row['Razlog']}"
+            f"{row.get('Številka PH', '')} | {row.get('HIS', '')} | {row.get('Objekt', '')} | "
+            f"{row.get('Lastnik rezervacije', '')} | {row.get('Razlog', '')}"
         )
     body = "\n".join(lines)
     return f"mailto:{recipient}?subject={quote(subject)}&body={quote(body)}"
@@ -344,42 +374,82 @@ if uploaded_files:
         st.warning("Naložiš lahko največ 6 datotek. Upoštevanih bo prvih 6.")
         uploaded_files = uploaded_files[:6]
 
-    all_results = []
+    # 1. korak: preberi vse datoteke enkrat (izognemo se dvojnemu branju)
+    parsed_files = []  # [(ime_datoteke, df), ...]
     for f in uploaded_files:
-        res = process_file(f, filter_date, min_days, URGENT_DAYS)
+        df = parse_file(f)
+        if df is None:
+            continue
+        missing = [c for c in REQUIRED_COLS if c not in df.columns]
+        if missing:
+            st.error(f"Datoteka **{f.name}** nima pričakovanih stolpcev: {missing}")
+            continue
+        parsed_files.append((f.name, df))
+
+    # 2. korak: izračunaj referenčni datum ("danes") iz podatkov samih -
+    # najnovejši datum v stolpcu 'Datum nastanka' med vsemi naloženimi
+    # datotekami. To se NE zanaša na (morda napačno) sistemsko uro strežnika.
+    all_creation_dates = []
+    for _, df in parsed_files:
+        if "Datum nastanka" in df.columns:
+            parsed_dates = df["Datum nastanka"].apply(parse_date).dropna()
+            all_creation_dates.extend(parsed_dates.tolist())
+
+    if all_creation_dates:
+        filter_date = max(all_creation_dates)
+    else:
+        filter_date = date.today()  # rezerva, če v podatkih ni najdenega datuma
+
+    st.info(
+        f"📅 Referenčni datum filtracije (najnovejši 'Datum nastanka' v "
+        f"naloženih podatkih): **{filter_date}**"
+    )
+
+    # 3. korak: filtriraj vsako datoteko glede na izračunani filter_date
+    all_results = []
+    for file_name, df in parsed_files:
+        res = filter_dataframe(df, file_name, filter_date, min_days, URGENT_DAYS, LONG_LEAD_DAYS)
         if res is not None and not res.empty:
             all_results.append(res)
-            st.caption(f"✅ {f.name}: najdenih {len(res)} vrstic")
+            st.caption(f"✅ {file_name}: najdenih {len(res)} vrstic")
         elif res is not None:
-            st.caption(f"⚪ {f.name}: ni vrstic, ki ustrezajo pogojem")
+            st.caption(f"⚪ {file_name}: ni vrstic, ki ustrezajo pogojem")
 
     if all_results:
         combined = pd.concat(all_results, ignore_index=True)
         st.success(f"Skupno najdenih {len(combined)} vrstic, ki ustrezajo pogojem.")
 
-        urgent_mask = combined["Razlog"].astype(str).str.contains("Prihod kmalu")
+        color_series = combined["Razlog"].astype(str).apply(_row_color)
 
-        def _highlight_urgent(row):
-            is_urgent = urgent_mask.loc[row.name]
-            return ["background-color: #ffcccc" if is_urgent else "" for _ in row]
+        def _highlight_row(row):
+            color = color_series.loc[row.name]
+            css = f"background-color: {_COLOR_HEX[color]}" if color else ""
+            return [css for _ in row]
 
-        st.caption("🔴 Rdeče označene vrstice = prihod je 1-3 dni (oz. nastavljeni prag npr. 24 h ipd.) od nastanka rezervacije - nujno preveriti.")
+        st.caption(
+            "🔴 Rdeče = prihod je 1-3 dni od nastanka rezervacije - nujno preveriti. "
+            f"🔵 Svetlo modro = prihod je več kot {LONG_LEAD_DAYS} dni od nastanka - "
+            "ni nujno, a naj se preveri plačilo pred prihodom."
+        )
         st.dataframe(
-            combined.style.apply(_highlight_urgent, axis=1),
+            combined.style.apply(_highlight_row, axis=1),
             use_container_width=True,
         )
 
-        # Excel za prenos (z rdečo osvetlitvijo vrstic "prihod kmalu")
+        # Excel za prenos (z rdečo/modro osvetlitvijo vrstic glede na kategorijo)
         output = BytesIO()
         with pd.ExcelWriter(output, engine="openpyxl") as writer:
             combined.to_excel(writer, index=False, sheet_name="Na čakanju")
             worksheet = writer.sheets["Na čakanju"]
-            red_fill = PatternFill(start_color="FFCCCC", end_color="FFCCCC", fill_type="solid")
+            fills = {
+                "red": PatternFill(start_color="FFCCCC", end_color="FFCCCC", fill_type="solid"),
+                "blue": PatternFill(start_color="CCE5FF", end_color="CCE5FF", fill_type="solid"),
+            }
             n_cols = combined.shape[1]
-            for excel_row, is_urgent in enumerate(urgent_mask, start=2):  # vrstica 1 = header
-                if is_urgent:
+            for excel_row, color in enumerate(color_series, start=2):  # vrstica 1 = header
+                if color:
                     for col in range(1, n_cols + 1):
-                        worksheet.cell(row=excel_row, column=col).fill = red_fill
+                        worksheet.cell(row=excel_row, column=col).fill = fills[color]
         output.seek(0)
 
         btn_col1, btn_col2, btn_col3 = st.columns(3)
@@ -392,7 +462,7 @@ if uploaded_files:
                 use_container_width=True,
             )
         with btn_col2:
-            print_html = build_print_html(combined, urgent_mask, filter_date)
+            print_html = build_print_html(combined, color_series, filter_date)
             components.html(
                 f"""
                 <div style="display:flex; justify-content:center;">
@@ -414,7 +484,7 @@ if uploaded_files:
                 height=45,
             )
         with btn_col3:
-            copy_html = build_table_html_for_clipboard(combined, urgent_mask, filter_date)
+            copy_html = build_table_html_for_clipboard(combined, color_series, filter_date)
             copy_text = build_table_text_for_clipboard(combined)
             components.html(
                 f"""
